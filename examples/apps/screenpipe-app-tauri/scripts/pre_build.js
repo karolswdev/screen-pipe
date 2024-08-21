@@ -54,6 +54,23 @@ const config = {
 			'libomp-dev', // OpenMP in ggml.ai
 			'libstdc++-12-dev', //ROCm
 		],
+		yumPackages: [
+			  "tesseract",
+			  "tesseract-devel",
+			  "ffmpeg",
+			  "openblas-devel",
+			  "pkgconf",
+			  "@development-tools",
+			  "glib2-devel",
+			  "gtk3-devel",
+			  "webkit2gtk3-devel",
+			  "clang",
+			  "cmake",
+			  "ffmpeg-devel",
+			  "alsa-lib-devel",
+			  "libomp-devel",
+			  "libstdc++-devel"
+		]
 	},
 	macos: {
 		ffmpegName: 'ffmpeg-7.0-macOS-default',
@@ -94,14 +111,45 @@ const exports = {
 }
 
 /* ########## Linux ########## */
-if (platform == 'linux') {
-	// Install APT packages
-	await $`sudo apt-get update`
-	if (hasFeature('opencl')) {
-		config.linux.aptPackages.push('libclblast-dev')
+
+if (platform === 'linux') {
+	// Determine the distribution (Fedora or Ubuntu)
+	let isFedora = false;
+	let isUbuntu = false;
+
+	try {
+		const osRelease = await fs.readFile('/etc/os-release', 'utf8');
+		if (osRelease.includes('Fedora')) {
+			isFedora = true;
+		} else if (osRelease.includes('Ubuntu')) {
+			isUbuntu = true;
+		}
+	} catch (error) {
+		console.error("Failed to determine Linux distribution:", error);
+		process.exit(1);
 	}
-	for (const name of config.linux.aptPackages) {
-		await $`sudo apt-get install -y ${name}`
+
+	if (isUbuntu) {
+		// Install APT packages
+		await $`sudo apt-get update`;
+		if (hasFeature('opencl')) {
+			config.linux.aptPackages.push('libclblast-dev');
+		}
+		for (const name of config.linux.aptPackages) {
+			await $`sudo apt-get install -y ${name}`;
+		}
+	} else if (isFedora) {
+		// Install YUM (dnf) packages
+		await $`sudo dnf update -y`;
+		if (hasFeature('opencl')) {
+			config.linux.yumPackages.push('clblast-devel');
+		}
+		for (const name of config.linux.yumPackages) {
+			await $`sudo dnf install -y ${name}`;
+		}
+	} else {
+		console.error("Unsupported Linux distribution.");
+		process.exit(1);
 	}
 
 	// Copy screenpipe binary
@@ -123,12 +171,12 @@ if (platform == 'linux') {
 			copied = true;
 			break;
 		} catch (error) {
-			console.warn(`failed to copy screenpipe binary from ${screenpipeSrc}:`, error);
+			console.warn(`Failed to copy screenpipe binary from ${screenpipeSrc}:`, error);
 		}
 	}
 
 	if (!copied) {
-		console.error("failed to copy screenpipe binary from any potential path.");
+		console.error("Failed to copy screenpipe binary from any potential path.");
 		// uncomment the following line if you want the script to exit on failure
 		// process.exit(1);
 	}
